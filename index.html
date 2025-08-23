@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>どんなきもち？</title>
+  <style>
+    :root{
+      --bg:#ffffff; --fg:#111; --muted:#667085; --card:#f7f7f9; --border:#e5e7eb;
+      --acc:#2563eb; --radius:16px; --shadow:0 6px 18px rgba(0,0,0,.08);
+      --ok:#16a34a; --calm:#60a5fa; --angry:#ef4444; --sad:#60a5fa; --fear:#8b5cf6; --shy:#f59e0b; --sleep:#94a3b8; --fun:#22c55e;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,"BIZ UDPGothic","Noto Sans JP",sans-serif;color:var(--fg);background:var(--bg);line-height:1.6}
+    header,footer{padding:16px}
+    header{border-bottom:1px solid var(--border)}
+    .container{max-width:960px;margin:auto;padding:12px}
+
+    /* Grid of emotion buttons */
+    .grid{display:grid;gap:12px;grid-template-columns:repeat(4,1fr)}
+    @media (max-width:780px){ .grid{grid-template-columns:repeat(3,1fr)} }
+    @media (max-width:520px){ .grid{grid-template-columns:repeat(2,1fr)} }
+
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+
+    .emobtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+      padding:16px;border-radius:20px;border:1px solid var(--border);background:#fff;cursor:pointer;
+      min-height:120px; text-align:center; transition:transform .05s ease-in-out, box-shadow .15s;
+      user-select:none; -webkit-tap-highlight-color:transparent;
+    }
+    .emobtn:active{transform:scale(.98)}
+    .emobtn .emoji{font-size:40px;line-height:1}
+    .emobtn .label{font-size:18px}
+
+    /* Controls */
+    .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0 4px}
+    .switch{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--border);border-radius:999px;background:#fff;cursor:pointer}
+    .switch input{appearance:none;width:22px;height:22px;border:1px solid var(--border);border-radius:6px;display:inline-block;vertical-align:middle;margin:0;position:relative}
+    .switch input:checked{background:var(--acc);border-color:var(--acc)}
+    .switch input:checked::after{content:"";position:absolute;inset:5px;background:#fff;border-radius:2px}
+
+    .range{display:flex;align-items:center;gap:8px}
+    .range input[type="range"]{accent-color:var(--acc)}
+
+    /* Fullscreen view */
+    .overlay{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:20px}
+    .overlay[aria-hidden="false"]{display:flex}
+    .panel{width:min(900px,96vw);height:min(700px,90vh);background:#fff;border-radius:24px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+    .panel-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border)}
+    .panel-title{margin:0;font-size:18px}
+    .panel-body{flex:1;display:grid;place-items:center;padding:12px}
+    .big{display:flex;flex-direction:column;align-items:center;gap:10px}
+    .big .emoji{font-size:min(30vh,220px)}
+    .big .text{font-size:min(8vh,64px)}
+    .panel-footer{display:flex;justify-content:center;gap:10px;padding:12px;border-top:1px solid var(--border)}
+    .btn{padding:12px 16px;border:1px solid var(--border);border-radius:12px;background:#fff;cursor:pointer;font-size:16px}
+    .btn.primary{background:var(--acc);color:#fff;border-color:transparent}
+
+    /* Color themes per emotion */
+    .theme-happy   { --theme:#fde68a; }
+    .theme-sad     { --theme:#bfdbfe; }
+    .theme-angry   { --theme:#fecaca; }
+    .theme-fear    { --theme:#ddd6fe; }
+    .theme-calm    { --theme:#dbeafe; }
+    .theme-shy     { --theme:#fde68a; }
+    .theme-sleepy  { --theme:#e5e7eb; }
+    .theme-fun     { --theme:#bbf7d0; }
+    .panel.theme-happy  .panel-body{background:var(--theme)}
+    .panel.theme-sad    .panel-body{background:var(--theme)}
+    .panel.theme-angry  .panel-body{background:var(--theme)}
+    .panel.theme-fear   .panel-body{background:var(--theme)}
+    .panel.theme-calm   .panel-body{background:var(--theme)}
+    .panel.theme-shy    .panel-body{background:var(--theme)}
+    .panel.theme-sleepy .panel-body{background:var(--theme)}
+    .panel.theme-fun    .panel-body{background:var(--theme)}
+
+    /* Accessibility */
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
+</head>
+<body>
+  <header class="container" role="banner">
+    <h1 id="title">どんなきもち？</h1>
+    <p id="desc">きもちをおしえて。おおきくひょうじして、よみあげます。</p>
+  </header>
+
+  <main id="app" class="container" role="application" aria-describedby="desc">
+    <section class="card" aria-label="せってい">
+      <div class="controls" id="controls">
+        <label class="switch" title="読み上げON/OFF">
+          <input id="speechToggle" type="checkbox" checked aria-label="読み上げON/OFF" />
+          <span>🔊 よみあげ</span>
+        </label>
+        <div class="range" title="よみあげの　はやさ">
+          <span>はやさ</span>
+          <input id="rate" type="range" min="0.6" max="1.4" step="0.1" value="1" aria-label="読み上げの速さ" />
+          <output id="rateOut">1.0</output>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="かんじょうをえらぶ">
+      <div id="grid" class="grid" role="grid" aria-labelledby="title">
+        <!-- Emotion buttons will be injected here -->
+      </div>
+    </section>
+  </main>
+
+  <div id="overlay" class="overlay" aria-hidden="true" aria-labelledby="chosen-label">
+    <div id="panel" class="panel" role="dialog" aria-modal="true">
+      <div class="panel-header">
+        <h2 id="chosen-label" class="panel-title">いまの きもち</h2>
+        <button id="close" class="btn" aria-label="とじる">✕ とじる</button>
+      </div>
+      <div class="panel-body">
+        <div class="big">
+          <div id="big-emoji" class="emoji" aria-hidden="true">😀</div>
+          <div id="big-text" class="text" aria-live="polite">うれしい</div>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button id="say" class="btn primary">🔊 よみあげ</button>
+        <button id="back" class="btn">⬅ もどる</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="container" role="contentinfo">
+    <p class="sr-only">© 特別支援教材開発研究所</p>
+  </footer>
+
+  <script>
+    // ---- Data -------------------------------------------------------------
+    const EMOTIONS = [
+      { key:'happy',  emoji:'😀', text:'うれしい' },
+      { key:'sad',    emoji:'😢', text:'かなしい' },
+      { key:'angry',  emoji:'😡', text:'おこってる' },
+      { key:'fear',   emoji:'😨', text:'こわい' },
+      { key:'calm',   emoji:'😌', text:'おちついた' },
+      { key:'shy',    emoji:'😳', text:'はずかしい' },
+      { key:'sleepy', emoji:'😴', text:'ねむい' },
+      { key:'fun',    emoji:'😋', text:'たのしい' },
+    ];
+
+    // ---- State ------------------------------------------------------------
+    const state = { speechOn:true, rate:1.0, current:null };
+
+    // ---- DOM --------------------------------------------------------------
+    const grid = document.getElementById('grid');
+    const overlay = document.getElementById('overlay');
+    const panel = document.getElementById('panel');
+    const bigEmoji = document.getElementById('big-emoji');
+    const bigText = document.getElementById('big-text');
+    const speechToggle = document.getElementById('speechToggle');
+    const rate = document.getElementById('rate');
+    const rateOut = document.getElementById('rateOut');
+
+    // Build buttons
+    function renderGrid(){
+      grid.replaceChildren(...EMOTIONS.map((e)=>{
+        const btn = document.createElement('button');
+        btn.className = 'emobtn';
+        btn.setAttribute('role','button');
+        btn.setAttribute('aria-label', e.text);
+        btn.dataset.key = e.key;
+        btn.innerHTML = `<div class="emoji">${e.emoji}</div><div class="label">${e.text}</div>`;
+        return btn;
+      }));
+    }
+
+    // Open full-screen panel
+    function openPanel(item){
+      state.current = item;
+      bigEmoji.textContent = item.emoji;
+      bigText.textContent = item.text;
+      overlay.setAttribute('aria-hidden','false');
+      panel.classList.remove(
+        'theme-happy','theme-sad','theme-angry','theme-fear','theme-calm','theme-shy','theme-sleepy','theme-fun'
+      );
+      panel.classList.add('theme-' + item.key);
+      if(state.speechOn) say(item.text);
+      // Focus close for accessibility
+      setTimeout(()=> document.getElementById('close').focus(), 50);
+    }
+
+    function closePanel(){
+      overlay.setAttribute('aria-hidden','true');
+      state.current = null;
+    }
+
+    // Speech synthesis (simple)
+    function say(text){
+      if(!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const uttr = new SpeechSynthesisUtterance(text);
+      uttr.lang = 'ja-JP';
+      uttr.rate = state.rate;
+      // Try to pick a Japanese voice if available
+      const voices = speechSynthesis.getVoices();
+      const jp = voices.find(v=> v.lang && v.lang.toLowerCase().startsWith('ja'));
+      if(jp) uttr.voice = jp;
+      speechSynthesis.speak(uttr);
+    }
+
+    // ---- Events -----------------------------------------------------------
+    grid.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.emobtn');
+      if(!btn) return;
+      const item = EMOTIONS.find(x=> x.key === btn.dataset.key);
+      if(item) openPanel(item);
+    });
+
+    document.getElementById('close').addEventListener('click', closePanel);
+    document.getElementById('back').addEventListener('click', closePanel);
+    document.getElementById('say').addEventListener('click', ()=>{
+      if(state.current) say(state.current.text);
+    });
+
+    overlay.addEventListener('click', (e)=>{
+      if(e.target === overlay) closePanel(); // click outside panel
+    });
+
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape') closePanel();
+      if(e.key === 'Enter' && state.current) say(state.current.text);
+      if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
+        // keyboard cycle
+        const idx = EMOTIONS.findIndex(x=> x.key === (state.current?.key));
+        if(idx >= 0){
+          const next = e.key === 'ArrowRight' ? (idx+1)%EMOTIONS.length : (idx-1+EMOTIONS.length)%EMOTIONS.length;
+          openPanel(EMOTIONS[next]);
+        }
+      }
+    });
+
+    speechToggle.addEventListener('change', ()=>{
+      state.speechOn = speechToggle.checked;
+    });
+    rate.addEventListener('input', ()=>{
+      state.rate = Number(rate.value);
+      rateOut.textContent = state.rate.toFixed(1);
+    });
+
+    // Prepare voices (some browsers load async)
+    if('speechSynthesis' in window){
+      window.speechSynthesis.onvoiceschanged = ()=>{};
+    }
+
+    // init
+    renderGrid();
+  </script>
+</body>
+</html>
