@@ -39,10 +39,8 @@
     .switch input{appearance:none;width:22px;height:22px;border:1px solid var(--border);border-radius:6px;display:inline-block;vertical-align:middle;margin:0;position:relative}
     .switch input:checked{background:var(--acc);border-color:var(--acc)}
     .switch input:checked::after{content:"";position:absolute;inset:5px;background:#fff;border-radius:2px}
-
     .range{display:flex;align-items:center;gap:8px}
     .range input[type="range"]{accent-color:var(--acc)}
-
     .add-btn{padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:#fff;cursor:pointer}
     .add-btn.primary{background:var(--acc);color:#fff;border-color:transparent}
 
@@ -58,9 +56,10 @@
     .big{display:flex;flex-direction:column;align-items:center;gap:10px}
     .big .emoji{font-size:min(30vh,220px)}
     .big .text{font-size:min(8vh,64px)}
-    .panel-footer{display:flex;justify-content:center;gap:10px;padding:12px;border-top:1px solid var(--border)}
+    .panel-footer{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;padding:12px;border-top:1px solid var(--border)}
     .btn{padding:12px 16px;border:1px solid var(--border);border-radius:12px;background:#fff;cursor:pointer;font-size:16px}
     .btn.primary{background:var(--acc);color:#fff;border-color:transparent}
+    .btn.danger{border-color:#ef4444;color:#ef4444;background:#fff}
 
     /* Color themes per emotion */
     .theme-happy   { --theme:#fde68a; }
@@ -116,9 +115,7 @@
     </section>
 
     <section class="card" aria-label="かんじょうをえらぶ">
-      <div id="grid" class="grid" role="grid" aria-labelledby="title">
-        <!-- Emotion buttons will be injected here -->
-      </div>
+      <div id="grid" class="grid" role="grid" aria-labelledby="title"></div>
     </section>
   </main>
 
@@ -137,6 +134,8 @@
       </div>
       <div class="panel-footer">
         <button id="say" class="btn primary">🔊 よみあげ</button>
+        <!-- 削除ボタン（カスタムのときだけ表示） -->
+        <button id="del" class="btn danger" style="display:none">🗑️ さくじょ</button>
         <button id="back" class="btn">⬅ もどる</button>
       </div>
     </div>
@@ -172,6 +171,9 @@
       </div>
     </div>
   </div>
+
+  <!-- アナウンス（削除完了など） -->
+  <div aria-live="polite" class="sr-only" id="live"></div>
 
   <footer class="container" role="contentinfo">
     <p class="sr-only">© 特別支援教材開発研究所</p>
@@ -217,6 +219,9 @@
     const addColor = document.getElementById('addColor');
     const emojiPreview = document.getElementById('emojiPreview');
 
+    const delBtn = document.getElementById('del');
+    const live = document.getElementById('live');
+
     // ---- Utilities --------------------------------------------------------
     function loadCustoms(){
       try{ return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }catch{ return []; }
@@ -230,6 +235,8 @@
         ...state.customs.map(c=>({ key:c.key, emoji:c.emoji, text:c.text, color:c.color }))
       ];
     }
+    function isCustomKey(key){ return typeof key === 'string' && key.startsWith('c-'); }
+    function announce(msg){ live.textContent = ''; setTimeout(()=> live.textContent = msg, 10); }
 
     // Build buttons
     function renderGrid(){
@@ -261,6 +268,14 @@
         body.style.background = item.color;
       }else{
         panel.classList.add('theme-' + item.key);
+      }
+
+      // カスタムなら削除ボタン表示、既定は非表示
+      if(isCustomKey(item.key)){
+        delBtn.style.display = '';
+        delBtn.disabled = false;
+      }else{
+        delBtn.style.display = 'none';
       }
 
       overlay.setAttribute('aria-hidden','false');
@@ -322,6 +337,20 @@
       if(state.current) say(state.current.text);
     });
 
+    // 削除処理（カスタムのみ）
+    delBtn.addEventListener('click', ()=>{
+      const cur = state.current;
+      if(!cur || !isCustomKey(cur.key)) return;
+      const ok = confirm(`「${cur.text}」を さくじょ しますか？\n（あとから戻せません）`);
+      if(!ok) return;
+      // 削除
+      state.customs = state.customs.filter(c => c.key !== cur.key);
+      saveCustoms();
+      renderGrid();
+      closePanel();
+      announce('きもちを さくじょしました');
+    });
+
     overlay.addEventListener('click', (e)=>{
       if(e.target === overlay) closePanel(); // click outside panel
     });
@@ -332,6 +361,12 @@
         else closePanel();
       }
       if(e.key === 'Enter' && state.current) say(state.current.text);
+      if(e.key === 'Delete' || e.key === 'Backspace'){
+        // アクセシビリティ: 表示中がカスタムならDeleteキーで削除
+        if(state.current && isCustomKey(state.current.key)){
+          delBtn.click();
+        }
+      }
       if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
         const items = allEmotions();
         const idx = items.findIndex(x=> x.key === (state.current?.key));
@@ -379,6 +414,7 @@
       renderGrid();
       closeAddDialog();
       openPanel(entry);
+      announce('きもちを ついかしました');
     });
 
     // init
