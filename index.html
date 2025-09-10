@@ -43,9 +43,14 @@
     .range{display:flex;align-items:center;gap:8px}
     .range input[type="range"]{accent-color:var(--acc)}
 
-    /* Fullscreen view */
-    .overlay{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:20px}
+    .add-btn{padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:#fff;cursor:pointer}
+    .add-btn.primary{background:var(--acc);color:#fff;border-color:transparent}
+
+    /* Overlay / Dialogs */
+    .overlay{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
     .overlay[aria-hidden="false"]{display:flex}
+
+    /* Big panel */
     .panel{width:min(900px,96vw);height:min(700px,90vh);background:#fff;border-radius:24px;box-shadow:var(--shadow);display:flex;flex-direction:column}
     .panel-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border)}
     .panel-title{margin:0;font-size:18px}
@@ -75,6 +80,15 @@
     .panel.theme-sleepy .panel-body{background:var(--theme)}
     .panel.theme-fun    .panel-body{background:var(--theme)}
 
+    /* Add emotion sheet */
+    .sheet{width:min(560px,96vw);background:#fff;border-radius:20px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+    .sheet .row{display:flex;gap:10px;align-items:center;margin:8px 0}
+    .sheet label{min-width:5.5em}
+    .sheet input[type="text"]{flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:16px}
+    .sheet input[type="color"]{width:48px;height:40px;border:1px solid var(--border);border-radius:10px;background:#fff;padding:0}
+    .sheet .emoji-preview{font-size:40px;line-height:1;padding:6px 10px;border:1px dashed var(--border);border-radius:10px;min-width:64px;text-align:center;background:#fff}
+    .help{color:var(--muted);font-size:14px;margin-top:4px}
+
     /* Accessibility */
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   </style>
@@ -97,6 +111,7 @@
           <input id="rate" type="range" min="0.6" max="1.4" step="0.1" value="1" aria-label="読み上げの速さ" />
           <output id="rateOut">1.0</output>
         </div>
+        <button id="openAdd" class="add-btn primary" aria-haspopup="dialog" aria-controls="addOverlay">＋ きもちを追加</button>
       </div>
     </section>
 
@@ -107,6 +122,7 @@
     </section>
   </main>
 
+  <!-- Big display dialog -->
   <div id="overlay" class="overlay" aria-hidden="true" aria-labelledby="chosen-label">
     <div id="panel" class="panel" role="dialog" aria-modal="true">
       <div class="panel-header">
@@ -126,13 +142,44 @@
     </div>
   </div>
 
+  <!-- Add emotion dialog -->
+  <div id="addOverlay" class="overlay" aria-hidden="true" aria-labelledby="addTitle">
+    <div class="sheet" role="dialog" aria-modal="true" aria-describedby="addDesc">
+      <div class="panel-header">
+        <h2 id="addTitle" class="panel-title">きもちを ついか</h2>
+        <button id="addClose" class="btn" aria-label="とじる">✕ とじる</button>
+      </div>
+      <div class="panel-body" style="display:block">
+        <div class="row">
+          <label for="addEmoji">えもじ</label>
+          <div class="emoji-preview" id="emojiPreview" aria-hidden="true">🙂</div>
+          <input id="addEmoji" type="text" inputmode="text" placeholder="🙂 など" aria-label="絵文字" maxlength="4" style="max-width:120px">
+        </div>
+        <div class="row">
+          <label for="addLabel">なまえ</label>
+          <input id="addLabel" type="text" placeholder="うきうき など" aria-label="なまえ">
+        </div>
+        <div class="row">
+          <label for="addColor">いろ</label>
+          <input id="addColor" type="color" value="#e0f2fe" aria-label="背景いろ">
+          <div class="help">※ おおきくひょうじしたときの うしろの いろ</div>
+        </div>
+        <div class="help">例：えもじ「🤗」 なまえ「だいすき」 いろ「やさしい色」</div>
+      </div>
+      <div class="panel-footer">
+        <button id="addSave" class="btn primary">💾 ほぞん</button>
+        <button id="addCancel" class="btn">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
   <footer class="container" role="contentinfo">
     <p class="sr-only">© 特別支援教材開発研究所</p>
   </footer>
 
   <script>
     // ---- Data -------------------------------------------------------------
-    const EMOTIONS = [
+    const DEFAULTS = [
       { key:'happy',  emoji:'😀', text:'うれしい' },
       { key:'sad',    emoji:'😢', text:'かなしい' },
       { key:'angry',  emoji:'😡', text:'おこってる' },
@@ -142,9 +189,13 @@
       { key:'sleepy', emoji:'😴', text:'ねむい' },
       { key:'fun',    emoji:'😷', text:'たいちょうふりょう' },
     ];
+    /* 互換用：旧コードからの EMOTIONS 参照にも対応 */
+    const EMOTIONS = DEFAULTS;
+
+    const LS_KEY = 'customEmotions.v1';
 
     // ---- State ------------------------------------------------------------
-    const state = { speechOn:true, rate:1.0, current:null };
+    const state = { speechOn:true, rate:1.0, current:null, customs: loadCustoms() };
 
     // ---- DOM --------------------------------------------------------------
     const grid = document.getElementById('grid');
@@ -156,9 +207,34 @@
     const rate = document.getElementById('rate');
     const rateOut = document.getElementById('rateOut');
 
+    const openAdd = document.getElementById('openAdd');
+    const addOverlay = document.getElementById('addOverlay');
+    const addClose = document.getElementById('addClose');
+    const addCancel = document.getElementById('addCancel');
+    const addSave = document.getElementById('addSave');
+    const addEmoji = document.getElementById('addEmoji');
+    const addLabel = document.getElementById('addLabel');
+    const addColor = document.getElementById('addColor');
+    const emojiPreview = document.getElementById('emojiPreview');
+
+    // ---- Utilities --------------------------------------------------------
+    function loadCustoms(){
+      try{ return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }catch{ return []; }
+    }
+    function saveCustoms(){
+      localStorage.setItem(LS_KEY, JSON.stringify(state.customs));
+    }
+    function allEmotions(){
+      return [
+        ...DEFAULTS,
+        ...state.customs.map(c=>({ key:c.key, emoji:c.emoji, text:c.text, color:c.color }))
+      ];
+    }
+
     // Build buttons
     function renderGrid(){
-      grid.replaceChildren(...EMOTIONS.map((e)=>{
+      const items = allEmotions();
+      grid.replaceChildren(...items.map((e)=>{
         const btn = document.createElement('button');
         btn.className = 'emobtn';
         btn.setAttribute('role','button');
@@ -174,13 +250,21 @@
       state.current = item;
       bigEmoji.textContent = item.emoji;
       bigText.textContent = item.text;
-      overlay.setAttribute('aria-hidden','false');
+
+      // テーマ背景（デフォルト or カスタム色）
       panel.classList.remove(
         'theme-happy','theme-sad','theme-angry','theme-fear','theme-calm','theme-shy','theme-sleepy','theme-fun'
       );
-      panel.classList.add('theme-' + item.key);
+      const body = panel.querySelector('.panel-body');
+      body.style.background = '';
+      if(item.color){
+        body.style.background = item.color;
+      }else{
+        panel.classList.add('theme-' + item.key);
+      }
+
+      overlay.setAttribute('aria-hidden','false');
       if(state.speechOn) say(item.text);
-      // Focus close for accessibility
       setTimeout(()=> document.getElementById('close').focus(), 50);
     }
 
@@ -189,25 +273,46 @@
       state.current = null;
     }
 
-    // Speech synthesis (simple)
+    // Speech synthesis
     function say(text){
       if(!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       const uttr = new SpeechSynthesisUtterance(text);
       uttr.lang = 'ja-JP';
       uttr.rate = state.rate;
-      // Try to pick a Japanese voice if available
       const voices = speechSynthesis.getVoices();
       const jp = voices.find(v=> v.lang && v.lang.toLowerCase().startsWith('ja'));
       if(jp) uttr.voice = jp;
       speechSynthesis.speak(uttr);
     }
 
+    // ---- Add dialog -------------------------------------------------------
+    function openAddDialog(){
+      addOverlay.setAttribute('aria-hidden','false');
+      addEmoji.value = '';
+      addLabel.value = '';
+      emojiPreview.textContent = '🙂';
+      addEmoji.focus();
+    }
+    function closeAddDialog(){
+      addOverlay.setAttribute('aria-hidden','true');
+    }
+    function sanitizeLabel(s){
+      return (s||'').trim().slice(0, 20);
+    }
+    function pickEmoji(s){
+      const t = (s||'').trim();
+      return t || '🙂';
+    }
+    function makeKey(){
+      return 'c-' + Date.now().toString(36) + '-' + Math.floor(Math.random()*1e4).toString(36);
+    }
+
     // ---- Events -----------------------------------------------------------
     grid.addEventListener('click', (e)=>{
       const btn = e.target.closest('.emobtn');
       if(!btn) return;
-      const item = EMOTIONS.find(x=> x.key === btn.dataset.key);
+      const item = allEmotions().find(x=> x.key === btn.dataset.key);
       if(item) openPanel(item);
     });
 
@@ -222,14 +327,17 @@
     });
 
     document.addEventListener('keydown', (e)=>{
-      if(e.key === 'Escape') closePanel();
+      if(e.key === 'Escape'){
+        if(addOverlay.getAttribute('aria-hidden') === 'false') closeAddDialog();
+        else closePanel();
+      }
       if(e.key === 'Enter' && state.current) say(state.current.text);
       if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
-        // keyboard cycle
-        const idx = EMOTIONS.findIndex(x=> x.key === (state.current?.key));
+        const items = allEmotions();
+        const idx = items.findIndex(x=> x.key === (state.current?.key));
         if(idx >= 0){
-          const next = e.key === 'ArrowRight' ? (idx+1)%EMOTIONS.length : (idx-1+EMOTIONS.length)%EMOTIONS.length;
-          openPanel(EMOTIONS[next]);
+          const next = e.key === 'ArrowRight' ? (idx+1)%items.length : (idx-1+items.length)%items.length;
+          openPanel(items[next]);
         }
       }
     });
@@ -242,10 +350,36 @@
       rateOut.textContent = state.rate.toFixed(1);
     });
 
-    // Prepare voices (some browsers load async)
     if('speechSynthesis' in window){
       window.speechSynthesis.onvoiceschanged = ()=>{};
     }
+
+    // Add dialog events
+    openAdd.addEventListener('click', openAddDialog);
+    addClose.addEventListener('click', closeAddDialog);
+    addCancel.addEventListener('click', closeAddDialog);
+    addOverlay.addEventListener('click', (e)=>{
+      if(e.target === addOverlay) closeAddDialog();
+    });
+    addEmoji.addEventListener('input', ()=>{
+      emojiPreview.textContent = pickEmoji(addEmoji.value);
+    });
+    addSave.addEventListener('click', ()=>{
+      const label = sanitizeLabel(addLabel.value);
+      const emoji = pickEmoji(addEmoji.value);
+      const color = addColor.value || '#e0f2fe';
+      if(!label){
+        addLabel.focus();
+        addLabel.setAttribute('aria-invalid', 'true');
+        return;
+      }
+      const entry = { key: makeKey(), emoji, text: label, color };
+      state.customs.push(entry);
+      saveCustoms();
+      renderGrid();
+      closeAddDialog();
+      openPanel(entry);
+    });
 
     // init
     renderGrid();
